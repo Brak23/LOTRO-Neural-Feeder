@@ -471,8 +471,13 @@ static bool FeedNgxLogIsNoise(const char *m)
            strstr(m, "FillCreationParams") != nullptr || strstr(m, ") from cache (location:") != nullptr;
 }
 
+// NGX's own line for a driver core its signature check refused (feed_ngx_trust.h says why that
+// reads as "error 0"). Noted here because this is where every routed line passes.
+static bool g_ngx_core_refused_unsigned;
+
 static void NVSDK_CONV FeedNgxLogCallback(const char *message, NVSDK_NGX_Logging_Level, NVSDK_NGX_Feature component)
 {
+    if (message != nullptr && strstr(message, "failed to load NGXCore: 0 (") != nullptr) g_ngx_core_refused_unsigned = true;
     if (g_ngx_log_fn == nullptr || message == nullptr) return;
     if (!g_ngx_log_verbose && FeedNgxLogIsNoise(message)) return;
     char line[1024];

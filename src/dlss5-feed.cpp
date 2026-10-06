@@ -56,6 +56,7 @@
 #include <nvsdk_ngx_defs_dlssd.h>   // SuperSamplingDenoising.Available (DLSS Ray Reconstruction, nvngx_dlssd.dll)
 
 #include "feed_ngx.h"  // NGX result names and DLL identity, shared with host64
+#include "feed_ngx_trust.h" // after a failure: why NGX would not load the driver core in this process
 #include "feed_crash.h" // naming a C++ throw and the modules it came through, shared with host64
 #include "feed_vk.h"   // raw-Vulkan interop for the Vulkan transport (see PLAN-VULKAN)
 #include "feed_vk_hook.h"   // in-process vkCreateDevice hook: appends the interop extensions the transport needs
@@ -66,8 +67,9 @@
 #include "feed_fsr1.h" // AMD FSR 1 EASU + RCAS: the optional expand-back for work_resolution < 100%
 #include "feed_pq12.h" // the D3D12 PQ<->linear pass, for the transports with no shaders of their own
 #include "feed_hold12.h" // the output stabiliser: one compute pass after the evaluate, all four transports
+#include "feed_depthsrc.h" // which buffer Generic Depth binds, against the back buffer and any MSAA depth (#145)
 
-#define FEED_VERSION "1.18.0-beta.1"
+#define FEED_VERSION "1.18.0-beta.2"
 #ifndef FEED_BUILD_ID
 #define FEED_BUILD_ID "unknown"
 #endif
@@ -2621,6 +2623,9 @@ static void NgxDiagnosticPass(ID3D12Device *dev, const wchar_t *data_path, bool 
     NVSDK_NGX_D3D12_Shutdown1(dev);
     FeedNgxUnrouteLog();
     Log("[feed] ===== end of NGX's own log (the diagnostic init returned 0x%08X %s) =====", r, NgxResultName(r));
+    // MK11 (#132) and RE2 (#141): NGX refused the driver's own _nvngx.dll in the game while
+    // host64 loaded it. Say which step of NGX's signature check fails here, and what is hooked.
+    if (g_ngx_core_refused_unsigned) FeedNgxTrustReport(&Log, "feed");
 }
 
 // CPU ticks spent inside the last NGX call. The neural consumer's detour runs INSIDE these
@@ -8761,6 +8766,7 @@ static void OnRenderTechnique(reshade::api::effect_runtime *rt, reshade::api::ef
         if (g.technique.handle == 0 || technique.handle != g.technique.handle) return;
     }
     g_bound_last_render = GetTickCount64();
+    feed_depthsrc::Check(rt, kEffectFile, &Log, "feed");
     FeedFrame(rt, cl, rtv);
 }
 
@@ -9203,6 +9209,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
         reshade::register_event<reshade::addon_event::reshade_render_technique>(OnRenderTechnique);
         reshade::register_event<reshade::addon_event::reshade_present>(OnReShadePresent);
         reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+        feed_depthsrc::Register();
         reshade::register_overlay(nullptr, DrawOverlay);
     }
     else if (reason == DLL_PROCESS_DETACH)
@@ -9231,6 +9238,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
         reshade::unregister_event<reshade::addon_event::reshade_render_technique>(OnRenderTechnique);
         reshade::unregister_event<reshade::addon_event::reshade_present>(OnReShadePresent);
         reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+        feed_depthsrc::Unregister();
         FeedVkFramePresentRemove();
         FeedVkHookRemove();   // before this code is unmapped -- ReShade reloads add-ons per Vulkan instance
         g_ngx_dying = true;   // process is exiting: never call back into NGX

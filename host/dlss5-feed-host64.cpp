@@ -38,6 +38,7 @@
 #include <nvsdk_ngx_defs_dlssd.h>   // SuperSamplingDenoising.Available (DLSS Ray Reconstruction, nvngx_dlssd.dll)
 
 #include "../src/feed_ngx.h"  // NGX result names and DLL identity, shared with the add-on
+#include "../src/feed_ngx_trust.h" // after a failure: why NGX would not load the driver core here
 #include "../src/feed_crash.h" // naming a C++ throw and the modules it came through, likewise
 #include "../src/feed_ipc.h"
 #include "../src/feed_fmt.h"
@@ -2506,20 +2507,38 @@ static bool InitNgx()
         Log("[host] NGX application data path: %ls (%s)", data_path, writable ? "writable" : "NOT WRITABLE");
     }
 
+    // The game folder above host64\. A hand-made helper install (#132, MK11) leaves
+    // nvngx_dlss.dll and nvngx_dlssnr.dll beside the game exe, where the in-process add-on
+    // found them, and the helper then failed on FeatureNotFound with the files one folder up.
+    // host64\ stays first, so a runtime put there on purpose still wins.
+    wchar_t parent[MAX_PATH] = {};
+    wcscpy_s(parent, data_path);
+    {
+        const size_t n = wcslen(parent);
+        if (n > 0) parent[n - 1] = L'\0';                       // drop the trailing slash
+        if (wchar_t *s = wcsrchr(parent, L'\\')) *(s + 1) = L'\0';
+        else parent[0] = L'\0';
+    }
     {
         char dir8[MAX_PATH] = {};
         WideCharToMultiByte(CP_UTF8, 0, data_path, -1, dir8, MAX_PATH, nullptr, nullptr);
         FeedLogNgxRuntimes(&Log, "host", dir8);
+        if (parent[0] != L'\0')
+        {
+            WideCharToMultiByte(CP_UTF8, 0, parent, -1, dir8, MAX_PATH, nullptr, nullptr);
+            Log("[host] NGX also searches the game folder above host64\\ (second, after host64\\ itself):");
+            FeedLogNgxRuntimes(&Log, "host", dir8);
+        }
     }
 
     // A PathListInfo, which this side passed as nullptr while the add-on passed one. That
     // was the last structural difference between the two call sites, and issue #47 is built
     // entirely on comparing them -- so it should not be a difference at all.
-    const wchar_t *const search[1] = { data_path };
+    const wchar_t *const search[2] = { data_path, parent };
     NVSDK_NGX_FeatureCommonInfo info = {};
     FeedNgxRouteLog(&info, &Log, "host");
     info.PathListInfo.Path   = search;
-    info.PathListInfo.Length = 1;
+    info.PathListInfo.Length = parent[0] != L'\0' ? 2 : 1;
 
     static bool opti_first_call_delay_done = false;
     if (g_opti.present && !opti_first_call_delay_done)
@@ -2598,6 +2617,7 @@ static bool InitNgx()
         else
             Log("[host] NGX Core: the HKLM NGXCore key could not be opened -- the driver's NGX runtime may not be installed");
 
+        if (g_ngx_core_refused_unsigned) FeedNgxTrustReport(&Log, "host");
         // Say what NGX actually objected to. Everything above is evidence; this is the verdict,
         // and it is the line a reporter quotes (#47, #72, #73).
         Log("[host] %s", FeedNgxWhyNot(g_ngx_verdict));

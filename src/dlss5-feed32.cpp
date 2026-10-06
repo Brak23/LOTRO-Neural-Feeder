@@ -63,8 +63,9 @@ static void FeedOnVkDeviceGeneration();
 #include "feed_ldr.h"       // loader notifications: vulkan-1.dll or ReShade unloading under us (#135)
 #include "feed_dfc.h"       // Deep Fried Chicken: only the file scan is used here (it lives in host64\)
 #include "feed_opti.h"      // OptiScaler DLSS-NR: only the file scan and the ini reader are used here (it lives in host64 too)
+#include "feed_depthsrc.h"  // which buffer Generic Depth binds, against the back buffer and any MSAA depth (#145)
 
-#define FEED_VERSION "1.18.0-beta.1"
+#define FEED_VERSION "1.18.0-beta.2"
 #ifndef FEED_BUILD_ID
 #define FEED_BUILD_ID "unknown"
 #endif
@@ -5747,6 +5748,7 @@ static void OnRenderTechnique(reshade::api::effect_runtime *rt, reshade::api::ef
         if (g.technique.handle == 0 || technique.handle != g.technique.handle) return;
     }
     g_bound_last_render = GetTickCount64();
+    feed_depthsrc::Check(rt, kEffectFile, &Log, "feed32");
     FeedFrame(rt, cl, rtv);
 }
 
@@ -6342,6 +6344,7 @@ static void RegisterReShadeCallbacks()
     reshade::register_event<reshade::addon_event::reshade_overlay>(OnOverlay);
     reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
     reshade::register_event<reshade::addon_event::reshade_open_overlay>(OnOpenOverlay);
+    feed_depthsrc::Register();
     reshade::register_overlay(nullptr, DrawOverlay);
 }
 
@@ -6358,6 +6361,7 @@ static void UnregisterReShadeCallbacks()
     reshade::unregister_event<reshade::addon_event::reshade_reloaded_effects>(OnReloadedEffects);
     reshade::unregister_event<reshade::addon_event::reshade_render_technique>(OnRenderTechnique);
     reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+    feed_depthsrc::Unregister();
 }
 
 // ReShade owns add-on registrations per Vulkan instance, while Windows may keep this
