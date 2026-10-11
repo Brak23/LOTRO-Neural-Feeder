@@ -1672,6 +1672,16 @@ function Report-FeedLog
                 Report -Status 'Fail' -Text ($Label + ': ' + $txt) `
                        -Action 'Redeploy both halves from the same release / fix the flagged file, then re-run the game once.'
             }
+            elseif ($b -match '(?i)WARNING: depth source:') {
+                # #145: the bound depth is not at the back buffer's size -- a shadow atlas,
+                # typically, because the real scene depth is multisampled and greyed out.
+                $m = [regex]::Match($b, '(\d+x\d+) buffer, but the back buffer is (\d+x\d+)')
+                $sizes = if ($m.Success) { ' (' + $m.Groups[1].Value + ' bound, back buffer ' + $m.Groups[2].Value + ')' } else { '' }
+                $msaa = $b -match '(?i)samples \(MSAA\)'
+                Report -Status 'Warn' -Text ($Label + ': Generic Depth is feeding a depth buffer that is not the scene''s' + $sizes + ' -- DLSS gets wrong depth.') `
+                       -Action $(if ($msaa) { 'Turn MSAA off in the game''s graphics settings: the real scene depth is multisampled and ReShade cannot read it. DLSS already antialiases.' }
+                                 else { 'ReShade overlay > Add-ons > Generic Depth: pick the candidate at your resolution with the most draw calls. If it is greyed out as multisampled, turn MSAA off in the game.' })
+            }
             else {
                 Report -Status 'Warn' -Text ($Label + ': ' + $txt)
             }
