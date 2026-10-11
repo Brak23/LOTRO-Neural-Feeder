@@ -69,7 +69,7 @@
 #include "feed_hold12.h" // the output stabiliser: one compute pass after the evaluate, all four transports
 #include "feed_depthsrc.h" // which buffer Generic Depth binds, against the back buffer and any MSAA depth (#145)
 
-#define FEED_VERSION "1.18.0-beta.2"
+#define FEED_VERSION "1.19.0"
 #ifndef FEED_BUILD_ID
 #define FEED_BUILD_ID "unknown"
 #endif
@@ -5947,8 +5947,8 @@ static bool InitSessionGl(reshade::api::effect_runtime *rt)
         return false;
     }
     g.gl_ctx = g.gl.wglGetCurrentContext();
-    Log("[feed] OpenGL: renderer=\"%s\" version=\"%s\" context=%p thread=%lu (interop extensions present)",
-        g.gl.renderer, g.gl.version, (void *)g.gl_ctx, GetCurrentThreadId());
+    Log("[feed] OpenGL: renderer=\"%s\" version=\"%s\" context=%p thread=%lu (interop extensions present) opengl32=%s",
+        g.gl.renderer, g.gl.version, (void *)g.gl_ctx, GetCurrentThreadId(), g.gl.lib_path);
     Log("[feed] extension query: %s", g.gl.diag);
 
     // Private D3D12 device, loaded so ReShade hooks it -- that hook is what lets the

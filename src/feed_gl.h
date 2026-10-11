@@ -204,6 +204,7 @@ struct FeedGl
 
     // Filled by FeedGlLoad for the caller to log verbatim.
     char missing[256];      // the first extension/entry point that was absent
+    char lib_path[260];     // which opengl32.dll we resolved (system, not ReShade's proxy)
     char renderer[128];     // GL_RENDERER, so a wrong-GPU hybrid laptop is obvious
     char version[64];       // GL_VERSION
     char diag[512];         // how the extension query behaved (see FeedGlSurveyExtensions)
@@ -350,7 +351,22 @@ static bool FeedGlLoad(FeedGl *gl)
 {
     *gl = {};
 
-    gl->lib = GetModuleHandleW(L"opengl32.dll");
+    // Resolve the SYSTEM opengl32.dll, not whatever answers to the bare name: when ReShade is
+    // installed as the game's opengl32.dll, calls through it raise ReShade events, and our own
+    // framebuffer binds and blits then disturb Generic Depth's per-frame depth copy (#144).
+    // ReShade forwards to the system copy on the same context, so calling it directly is safe.
+    {
+        wchar_t sys[MAX_PATH] = {};
+        const UINT n = GetSystemDirectoryW(sys, MAX_PATH);
+        if (n != 0 && n < MAX_PATH - 16) { wcscat_s(sys, L"\\opengl32.dll"); gl->lib = GetModuleHandleW(sys); }
+    }
+    if (gl->lib == nullptr) gl->lib = GetModuleHandleW(L"opengl32.dll");
+    if (gl->lib != nullptr)
+    {
+        wchar_t path[MAX_PATH] = {};
+        GetModuleFileNameW(gl->lib, path, MAX_PATH);
+        WideCharToMultiByte(CP_UTF8, 0, path, -1, gl->lib_path, sizeof(gl->lib_path), nullptr, nullptr);
+    }
     if (gl->lib == nullptr) { strcpy_s(gl->missing, "opengl32.dll is not loaded in this process"); return false; }
 
     gl->wglGetProcAddress    = reinterpret_cast<PFN_wglGetProcAddress_>(GetProcAddress(gl->lib, "wglGetProcAddress"));

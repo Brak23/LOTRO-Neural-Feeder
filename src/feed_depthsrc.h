@@ -108,12 +108,11 @@ namespace feed_depthsrc
                         "in the game's graphics settings -- DLSS already antialiases, so it costs nothing and usually gains "
                         "frame rate.", mw, mh, ms);
 
-        if (Near(dw, bw) && Near(dh, bh))
+        const bool screen_sized = Near(dw, bw) && Near(dh, bh);
+        if (screen_sized && !msaa_screen)
         {
-            log("[%s] depth source: Generic Depth gives the shader a %ux%u buffer, %u sample(s), at the %ux%u back buffer -- the right size%s",
-                tag, dw, dh, static_cast<unsigned>(dd.texture.samples), bw, bh,
-                msaa_screen ? " (a multisampled buffer of that size also exists; if the depth view still looks wrong, see the next line)" : "");
-            if (msaa_screen) log("[%s]  %s", tag, msaa_note + 1);
+            log("[%s] depth source: Generic Depth gives the shader a %ux%u buffer, %u sample(s), at the %ux%u back buffer -- the right size",
+                tag, dw, dh, static_cast<unsigned>(dd.texture.samples), bw, bh);
             return;
         }
 
@@ -129,6 +128,15 @@ namespace feed_depthsrc
         }
 
         char line[1100];
+        // Screen-sized but the game also has a screen-sized MSAA depth (#145): the scene is drawn into
+        // the MSAA one, so the single-sample buffer bound here is most likely a near-empty side target.
+        if (screen_sized)
+            _snprintf_s(line, sizeof(line), _TRUNCATE,
+                        "depth source: Generic Depth gives the shader a %ux%u single-sample buffer at the back buffer's size, "
+                        "but the game draws its scene into a multisampled depth buffer ReShade cannot read, so the bound one "
+                        "is probably a near-empty side target (watch for 'depth is FLAT' lines).%s",
+                        dw, dh, msaa_note);
+        else
         _snprintf_s(line, sizeof(line), _TRUNCATE,
                     "depth source: Generic Depth gives the shader a %ux%u buffer, but the back buffer is %ux%u. That is "
                     "not the scene's depth -- most likely a shadow map or atlas -- so DLSS and the neural pass are fed "

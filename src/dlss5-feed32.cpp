@@ -65,7 +65,7 @@ static void FeedOnVkDeviceGeneration();
 #include "feed_opti.h"      // OptiScaler DLSS-NR: only the file scan and the ini reader are used here (it lives in host64 too)
 #include "feed_depthsrc.h"  // which buffer Generic Depth binds, against the back buffer and any MSAA depth (#145)
 
-#define FEED_VERSION "1.18.0-beta.2"
+#define FEED_VERSION "1.19.0"
 #ifndef FEED_BUILD_ID
 #define FEED_BUILD_ID "unknown"
 #endif
@@ -4468,7 +4468,7 @@ static void FeedFrameGl(reshade::api::effect_runtime *rt, reshade::api::resource
         if (!FeedGlLoad(&g.gl))
         {
             Log("[feed32] OpenGL interop unavailable: %s", g.gl.missing);
-            Log("[feed32] renderer=\"%s\" version=\"%s\"", g.gl.renderer, g.gl.version);
+            Log("[feed32] renderer=\"%s\" version=\"%s\" opengl32=%s", g.gl.renderer, g.gl.version, g.gl.lib_path);
             Log("[feed32] extension query: %s", g.gl.diag);
             Log("[feed32] GL_EXT_memory_object_win32 + GL_EXT_semaphore_win32 are NVIDIA-supported on every");
             Log("[feed32] DLSS-capable driver. Their absence means this frame is not being rendered on the");
