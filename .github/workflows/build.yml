@@ -12,7 +12,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/lotro-prototype]
   pull_request:
   workflow_dispatch:
 
@@ -36,13 +36,13 @@ jobs:
       # Both live in public repositories, so this also works for pull
       # requests from forks, which get no secrets.
       # ------------------------------------------------------------------
-      - name: Resolve dependency revisions
+      - name: Pin dependency revisions
         id: deps
         shell: bash
         run: |
           set -euo pipefail
-          ngx=$(git ls-remote https://github.com/NVIDIA/DLSS.git HEAD | cut -f1)
-          vk=$(git ls-remote https://github.com/KhronosGroup/Vulkan-Headers.git HEAD | cut -f1)
+          ngx=374959484e79a640feaba44c93ac8cfb0a03f5b5
+          vk=c46850864f4661461b0f6cb9922c058ffea4915e
           echo "ngx=$ngx" >> "$GITHUB_OUTPUT"
           echo "vk=$vk"   >> "$GITHUB_OUTPUT"
           echo "NGX $ngx / Vulkan-Headers $vk"
@@ -54,7 +54,7 @@ jobs:
           path: |
             external/ngx
             external/vulkan
-          key: external-v2-${{ runner.os }}-ngx-${{ steps.deps.outputs.ngx }}-vk-${{ steps.deps.outputs.vk }}
+          key: external-v3-${{ runner.os }}-ngx-${{ steps.deps.outputs.ngx }}-vk-${{ steps.deps.outputs.vk }}
 
       - name: Fetch the NGX SDK
         if: steps.cache-external.outputs.cache-hit != 'true'
@@ -66,8 +66,9 @@ jobs:
           # the headers and the import library we link against.
           git clone --filter=blob:none --no-checkout --depth 1 \
               https://github.com/NVIDIA/DLSS.git "$RUNNER_TEMP/dlss"
-          git -C "$RUNNER_TEMP/dlss" sparse-checkout set --no-cone '/include/**' '/lib/**'
-          git -C "$RUNNER_TEMP/dlss" checkout
+          git -C "$RUNNER_TEMP/dlss" fetch --filter=blob:none --depth 1 origin "${{ steps.deps.outputs.ngx }}"
+          git -C "$RUNNER_TEMP/dlss" sparse-checkout set --no-cone '/include/**' '/lib/Windows_x86_64/x64/nvsdk_ngx_d.lib' '/LICENSE.txt'
+          git -C "$RUNNER_TEMP/dlss" checkout --detach "${{ steps.deps.outputs.ngx }}"
 
           mkdir -p external/ngx/libs
           find "$RUNNER_TEMP/dlss" -name 'nvsdk_ngx*.h' -exec cp {} external/ngx/ ';'
@@ -83,6 +84,7 @@ jobs:
             exit 1
           fi
           cp "$lib" external/ngx/libs/
+          cp "$RUNNER_TEMP/dlss/LICENSE.txt" external/ngx/LICENSE.txt
           for h in nvsdk_ngx.h nvsdk_ngx_helpers.h nvsdk_ngx_defs.h; do
             if [ ! -f "external/ngx/$h" ]; then
               echo "::error::missing NGX header $h"
@@ -96,7 +98,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vkh"
+          git clone --no-checkout --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vkh"
+          git -C "$RUNNER_TEMP/vkh" fetch --depth 1 origin "${{ steps.deps.outputs.vk }}"
+          git -C "$RUNNER_TEMP/vkh" checkout --detach "${{ steps.deps.outputs.vk }}"
           mkdir -p external/vulkan/vulkan external/vulkan/vk_video
           cp "$RUNNER_TEMP/vkh"/include/vulkan/*.h   external/vulkan/vulkan/
           cp "$RUNNER_TEMP/vkh"/include/vk_video/*.h external/vulkan/vk_video/
@@ -128,6 +132,10 @@ jobs:
       - name: spike (phase-0 cross-process sharing + OpenGL/Vulkan interop probes)
         shell: cmd
         run: call spike\build-spike.bat
+
+      - name: LOTRO offline fixture tests and package verification
+        shell: pwsh
+        run: ./lotro/tests/Run-OfflineTests.ps1
 
       # ------------------------------------------------------------------
       # Artifacts, so a reviewer can try a pull request without installing
