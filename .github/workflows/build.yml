@@ -67,7 +67,7 @@ jobs:
           git clone --filter=blob:none --no-checkout --depth 1 \
               https://github.com/NVIDIA/DLSS.git "$RUNNER_TEMP/dlss"
           git -C "$RUNNER_TEMP/dlss" fetch --filter=blob:none --depth 1 origin "${{ steps.deps.outputs.ngx }}"
-          git -C "$RUNNER_TEMP/dlss" sparse-checkout set --no-cone '/include/**' '/lib/Windows_x86_64/x64/nvsdk_ngx_d.lib' '/LICENSE.txt'
+          git -C "$RUNNER_TEMP/dlss" sparse-checkout set include lib/Windows_x86_64/x64
           git -C "$RUNNER_TEMP/dlss" checkout --detach "${{ steps.deps.outputs.ngx }}"
 
           mkdir -p external/ngx/libs
